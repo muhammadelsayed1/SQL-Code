@@ -1,0 +1,241 @@
+SELECT orders.*, accounts.*
+FROM accounts
+JOIN orders
+ON accounts.id = orders.account_id;
+
+
+SELECT o.occurred_at, a.name, o.total, o.total_amt_usd
+FROM accounts a
+JOIN orders o
+ON o.account_id = a.id
+WHERE o.occurred_at BETWEEN '01-01-2015' AND '01-01-2016'
+ORDER BY o.occurred_at DESC;
+
+
+SELECT a.name, MIN(total_amt_usd) smallest_order
+FROM accounts a
+JOIN orders o
+ON a.id = o.account_id
+GROUP BY a.name
+ORDER BY smallest_order;
+
+SELECT r.name, w.channel, COUNT(*) num_events
+FROM accounts a
+JOIN web_events w
+ON a.id = w.account_id
+JOIN sales_reps s
+ON s.id = a.sales_rep_id
+JOIN region r
+ON r.id = s.region_id
+GROUP BY r.name, w.channel
+ORDER BY num_events DESC;
+
+
+select distinct account_id , account_name
+from
+    (SELECT a.id as "account_id", r.id as "region_id", 
+     a.name as "account_name", r.name as "region_name"
+     FROM accounts a
+     JOIN sales_reps s
+     ON s.id = a.sales_rep_id
+     JOIN region r
+     ON r.id = s.region_id) t1 ;
+
+
+
+SELECT a.id, a.name, w.channel, COUNT(*) use_of_channel
+FROM accounts a
+JOIN web_events w
+ON a.id = w.account_id
+WHERE w.channel = 'facebook'
+GROUP BY a.id, a.name, w.channel
+ORDER BY use_of_channel DESC
+LIMIT 1;
+
+
+
+SELECT a.id, a.name, SUM(o.total_amt_usd) total_spent
+FROM accounts a
+JOIN orders o
+ON a.id = o.account_id
+GROUP BY a.id, a.name
+HAVING SUM(o.total_amt_usd) > 100000
+ORDER BY total_spent;
+
+SELECT DATE_PART('year', occurred_at) ord_year,  SUM(total_amt_usd) total_spent
+ FROM orders
+ GROUP BY 1
+ ORDER BY 2 DESC;
+
+
+
+SELECT DATE_PART('month', occurred_at) ord_month, COUNT(*) total_sales
+FROM orders
+WHERE occurred_at BETWEEN '2014-01-01' AND '2017-01-01'
+GROUP BY 1
+ORDER BY 2 DESC; 
+
+
+SELECT a.name, SUM(total_amt_usd) total_spent, 
+     CASE WHEN SUM(total_amt_usd) > 200000 THEN 'top'
+     WHEN  SUM(total_amt_usd) > 100000 THEN 'middle'
+     ELSE 'low' END AS customer_level
+FROM orders o
+JOIN accounts a
+ON o.account_id = a.id
+WHERE occurred_at > '2015-12-31' 
+GROUP BY 1
+ORDER BY 2 DESC;
+
+
+
+SELECT s.name, COUNT(*), SUM(o.total_amt_usd) total_spent, 
+     CASE WHEN COUNT(*) > 200 OR SUM(o.total_amt_usd) > 750000 THEN 'top'
+     WHEN COUNT(*) > 150 OR SUM(o.total_amt_usd) > 500000 THEN 'middle'
+     ELSE 'low' END AS sales_rep_level
+FROM orders o
+JOIN accounts a
+ON o.account_id = a.id 
+JOIN sales_reps s
+ON s.id = a.sales_rep_id
+GROUP BY s.name
+ORDER BY 3 DESC;
+
+
+
+WITH t1 AS (
+   SELECT r.name region_name, SUM(o.total_amt_usd) total_amt
+   FROM sales_reps s
+   JOIN accounts a
+   ON a.sales_rep_id = s.id
+   JOIN orders o
+   ON o.account_id = a.id
+   JOIN region r
+   ON r.id = s.region_id
+   GROUP BY r.name), 
+t2 AS (
+   SELECT MAX(total_amt)
+   FROM t1)
+SELECT r.name, COUNT(o.total) total_orders
+FROM sales_reps s
+JOIN accounts a
+ON a.sales_rep_id = s.id
+JOIN orders o
+ON o.account_id = a.id
+JOIN region r
+ON r.id = s.region_id
+GROUP BY r.name
+HAVING SUM(o.total_amt_usd) = (SELECT * FROM t2);
+
+
+
+
+WITH t1 AS (
+   SELECT AVG(o.total_amt_usd) avg_all
+   FROM orders o
+   JOIN accounts a
+   ON a.id = o.account_id),
+t2 AS (
+   SELECT o.account_id, AVG(o.total_amt_usd) avg_amt
+   FROM orders o
+   GROUP BY 1
+   HAVING AVG(o.total_amt_usd) > (SELECT * FROM t1))
+SELECT AVG(avg_amt)
+FROM t2;
+
+
+SELECT LEFT(primary_poc, STRPOS(primary_poc, ' ') -1 ) first_name, 
+RIGHT(primary_poc, LENGTH(primary_poc) - STRPOS(primary_poc, ' ')) last_name
+FROM accounts;
+
+
+WITH t1 AS (
+ SELECT LEFT(primary_poc,     STRPOS(primary_poc, ' ') -1 ) first_name
+,  RIGHT(primary_poc, LENGTH(primary_poc) - STRPOS(primary_poc, ' ')) last_name
+, name
+ FROM accounts)
+SELECT first_name, last_name
+, CONCAT(first_name, '.', last_name, '@', name, '.com')
+, LEFT(LOWER(first_name), 1)
+ || RIGHT(LOWER(first_name), 1)
+ || LEFT(LOWER(last_name), 1)
+ || RIGHT(LOWER(last_name), 1)
+ || LENGTH(first_name)
+ || LENGTH(last_name)
+ || REPLACE(UPPER(name), ' ', '')
+FROM t1;
+
+
+SELECT COALESCE(o.id, a.id) filled_id
+, a.name
+, a.website
+, a.lat
+, a.long
+, a.primary_poc
+, a.sales_rep_id
+, COALESCE(o.account_id, a.id) account_id
+, o.occurred_at
+, COALESCE(o.standard_qty, 0) standard_qty
+, COALESCE(o.gloss_qty,0) gloss_qty
+, COALESCE(o.poster_qty,0) poster_qty
+, COALESCE(o.total,0) total
+, COALESCE(o.standard_amt_usd,0) standard_amt_usd
+, COALESCE(o.gloss_amt_usd,0) gloss_amt_usd
+, COALESCE(o.poster_amt_usd,0) poster_amt_usd
+, COALESCE(o.total_amt_usd,0) total_amt_usd
+FROM accounts a
+LEFT JOIN orders o
+ON a.id = o.account_id;
+
+SELECT id,
+       account_id,
+       total,
+       RANK() OVER (PARTITION BY account_id ORDER BY total DESC) AS total_rank
+FROM orders
+
+
+SELECT occurred_at,
+       total_amt_usd,
+       LEAD(total_amt_usd) OVER (ORDER BY occurred_at) AS lead,
+       LEAD(total_amt_usd) OVER (ORDER BY occurred_at) - total_amt_usd AS lead_difference
+FROM (
+SELECT occurred_at,
+       SUM(total_amt_usd) AS total_amt_usd
+  FROM orders 
+ GROUP BY 1
+) sub
+
+
+SELECT id,
+       account_id,
+       DATE_TRUNC('year',occurred_at) AS year,
+       DENSE_RANK() OVER account_year_window AS dense_rank,
+       total_amt_usd,
+       SUM(total_amt_usd) OVER account_year_window AS sum_total_amt_usd,
+       COUNT(total_amt_usd) OVER account_year_window AS count_total_amt_usd,
+       AVG(total_amt_usd) OVER account_year_window AS avg_total_amt_usd,
+       MIN(total_amt_usd) OVER account_year_window AS min_total_amt_usd,
+       MAX(total_amt_usd) OVER account_year_window AS max_total_amt_usd
+FROM orders 
+WINDOW account_year_window AS (PARTITION BY account_id ORDER BY DATE_TRUNC('year',occurred_at))
+
+
+
+
+SELECT we1.id AS we_id,
+       we1.account_id AS we1_account_id,
+       we1.occurred_at AS we1_occurred_at,
+       we1.channel AS we1_channel,
+       we2.id AS we2_id,
+       we2.account_id AS we2_account_id,
+       we2.occurred_at AS we2_occurred_at,
+       we2.channel AS we2_channel
+  FROM web_events we1 
+ LEFT JOIN web_events we2
+   ON we1.account_id = we2.account_id
+  AND we1.occurred_at > we2.occurred_at
+  AND we1.occurred_at <= we2.occurred_at + INTERVAL '1 day'
+ORDER BY we1.account_id, we2.occurred_at
+
+
+
